@@ -1,0 +1,27 @@
+<div class="w-full max-w-md bg-gray-800 p-8 rounded-lg shadow-2xl border border-gray-700 animate-fade-in-up">
+    <h2 class="text-3xl font-bold text-center mb-6 text-white">Nuevo Recluta</h2>
+    <form id="register-form" class="space-y-4">
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">Correo Electrónico</label>
+            <input type="email" id="reg-email" placeholder="tu@dominio.com" required
+                class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-green-500 transition">
+            <p class="text-xs text-gray-500 mt-1">Solo dominios populares (Gmail, Outlook, etc.)</p>
+        </div>
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">Contraseña</label>
+            <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" required
+                class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-green-500 transition">
+        </div>
+        <button type="submit" id="btn-register"
+            class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded transition duration-300 transform hover:scale-105">
+            Registrarse
+        </button>
+    </form>
+    
+    <div class="mt-6 text-center text-sm">
+        <p class="text-gray-400">¿Ya tienes cuenta?</p>
+        <button id="link-to-login" class="text-blue-400 hover:text-blue-300 hover:underline font-medium focus:outline-none">
+            Volver al Login
+        </button>
+    </div>
+</div>
