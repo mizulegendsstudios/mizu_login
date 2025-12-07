@@ -1,52 +1,69 @@
 import { supabase } from './supabase.js';
-import { initLoginListeners, initDashboardListeners } from './auth.js';
+import { initLoginListeners, initDashboardListeners, initRegisterListeners, initForgotListeners } from './auth.js';
 
-// Cargador genérico de HTML
-async function loadComponent(elementId, path) {
+// --- Hacemos exportable esta función para usarla en auth.js ---
+export async function loadView(viewName) {
+    const containerId = 'app-container';
+    let path = '';
+    let initFunction = null;
+
+    switch (viewName) {
+        case 'login':
+            path = './components/login.html';
+            initFunction = initLoginListeners;
+            break;
+        case 'register':
+            path = './components/register.html';
+            initFunction = initRegisterListeners;
+            break;
+        case 'forgot':
+            path = './components/forgot.html';
+            initFunction = initForgotListeners;
+            break;
+        case 'dashboard':
+            path = './components/dashboard.html';
+            initFunction = initDashboardListeners;
+            break;
+    }
+
     try {
         const response = await fetch(path);
-        if (!response.ok) throw new Error(`No se pudo cargar ${path}`);
+        if (!response.ok) throw new Error(`Fallo al cargar ${path}`);
         const html = await response.text();
-        document.getElementById(elementId).innerHTML = html;
-        return true;
+        document.getElementById(containerId).innerHTML = html;
+        
+        // Ejecutamos la lógica específica de esa vista
+        if (initFunction) initFunction();
+
     } catch (err) {
         console.error(err);
-        return false;
     }
 }
 
-// Carga vistas protegidas vs públicas
 export async function renderApp(session) {
-    const container = 'app-container';
-    
     if (session) {
-        // Usuario logueado -> Cargar Dashboard
-        await loadComponent(container, './components/dashboard.html');
-        // Actualizar datos del usuario en la UI
+        await loadView('dashboard');
         document.getElementById('user-email').textContent = session.user.email;
-        // Activar botones del dashboard
-        initDashboardListeners();
     } else {
-        // Usuario no logueado -> Cargar Login
-        await loadComponent(container, './components/login.html');
-        // Activar formulario de login
-        initLoginListeners();
+        await loadView('login');
     }
 }
 
-// Inicialización Maestra
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Cargar Estructura Base (Header/Footer)
-    await loadComponent('header-container', './components/header.html');
-    await loadComponent('footer-container', './components/footer.html');
+    // Cargar layout base
+    const headerRes = await fetch('./components/header.html');
+    document.getElementById('header-container').innerHTML = await headerRes.text();
+    
+    const footerRes = await fetch('./components/footer.html');
+    document.getElementById('footer-container').innerHTML = await footerRes.text();
 
-    // 2. Verificar estado actual
+    // Sesión
     const { data: { session } } = await supabase.auth.getSession();
     await renderApp(session);
 
-    // 3. Escuchar cambios en vivo (Login/Logout dinámico)
     supabase.auth.onAuthStateChange((event, session) => {
-        console.log('Cambio de estado:', event);
-        renderApp(session);
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+            renderApp(session);
+        }
     });
 });
