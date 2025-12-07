@@ -1,10 +1,10 @@
-import { supabase } from './supabase.js'; // Asumido desde paso 3
+import { supabase } from './supabase.js'; 
 import { 
     initLoginListeners, 
     initDashboardListeners, 
     initRegisterListeners, 
     initForgotListeners,
-    initResetPasswordListeners // <- Nuevo listener importado
+    initResetPasswordListeners
 } from './auth.js';
 
 // Función genérica para cargar componentes HTML en el contenedor principal
@@ -13,7 +13,7 @@ export async function loadView(viewName) {
     let path = '';
     let initFunction = null;
 
-    // 1. Asignación de ruta y función de inicialización
+    // Asignación de ruta y función de inicialización para todas las vistas
     switch (viewName) {
         case 'login':
             path = './components/login.html';
@@ -27,7 +27,7 @@ export async function loadView(viewName) {
             path = './components/forgot.html';
             initFunction = initForgotListeners;
             break;
-        case 'reset-password': // Maneja la intercepción del link de recuperación
+        case 'reset-password': 
             path = './components/reset-password.html';
             initFunction = initResetPasswordListeners;
             break;
@@ -40,14 +40,13 @@ export async function loadView(viewName) {
             return;
     }
 
-    // 2. Carga del componente HTML y ejecución de la lógica
+    // Carga del componente y ejecución de la lógica
     try {
         const response = await fetch(path);
         if (!response.ok) throw new Error(`Fallo al cargar ${path}`);
         const html = await response.text();
         document.getElementById(containerId).innerHTML = html;
         
-        // Ejecutamos la lógica específica de esa vista (asigna eventos)
         if (initFunction) initFunction();
 
     } catch (err) {
@@ -58,23 +57,27 @@ export async function loadView(viewName) {
 // Decide qué vista cargar basada en el estado de autenticación y la URL
 export async function renderApp(session) {
     
-    // 1. Revisamos el URL para interceptar el link de recuperación
+    // 1. REVISIÓN CRÍTICA: Buscar tokens de Supabase en el Query String (?)
+    // Esto intercepta el redireccionamiento después de hacer clic en el email.
     const params = new URLSearchParams(window.location.search);
     const type = params.get('type');
+    const accessToken = params.get('access_token');
     
-    if (type === 'recovery') {
-        // Si hay token de recuperación en la URL, cargamos el formulario de reseteo
+    // Si encontramos el token de recuperación (recovery) O el token de acceso (access_token),
+    // asumimos que es el flujo de recuperación y cargamos la vista de reseteo.
+    if (type === 'recovery' || accessToken) {
+        
+        console.log("INTERCEPCIÓN DE URL: Cargando formulario de reseteo.");
         await loadView('reset-password');
         
-        // Limpiamos los parámetros del URL para evitar recargas erróneas
+        // Limpiamos la URL de los tokens después de la carga
         window.history.replaceState(null, '', window.location.pathname);
         return; 
     }
 
-    // 2. Comportamiento normal (sin token de recuperación)
+    // 2. Comportamiento normal
     if (session) {
         await loadView('dashboard');
-        // Asegurarse de que el elemento existe antes de intentar establecer el texto
         const userEmailElement = document.getElementById('user-email');
         if (userEmailElement) {
             userEmailElement.textContent = session.user.email;
@@ -84,23 +87,27 @@ export async function renderApp(session) {
     }
 }
 
-// Inicialización Maestra al cargar el DOM
+// Inicialización del motor de la aplicación
 document.addEventListener('DOMContentLoaded', async () => {
-    // Cargar Header y Footer estáticos
-    const headerRes = await fetch('./components/header.html');
-    document.getElementById('header-container').innerHTML = await headerRes.text();
     
-    const footerRes = await fetch('./components/footer.html');
-    document.getElementById('footer-container').innerHTML = await footerRes.text();
+    // Cargar Header y Footer
+    try {
+        const headerRes = await fetch('./components/header.html');
+        document.getElementById('header-container').innerHTML = await headerRes.text();
+        
+        const footerRes = await fetch('./components/footer.html');
+        document.getElementById('footer-container').innerHTML = await footerRes.text();
+    } catch (e) {
+        console.error("Asegúrate de que components/header.html y footer.html existan.");
+    }
 
-    // Obtener estado inicial y renderizar
+    // Obtener estado inicial de la sesión
     const { data: { session } } = await supabase.auth.getSession();
     await renderApp(session);
 
-    // Escuchar cambios en vivo (Login/Logout/etc.)
+    // Escuchar cualquier cambio de autenticación en tiempo real
     supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
-            renderApp(session);
-        }
+        // Redibuja la aplicación si el estado de auth cambia
+        renderApp(session);
     });
 });
