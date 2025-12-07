@@ -24,17 +24,59 @@ export async function handleLogout() {
     if (error) console.error('Error al salir:', error);
 }
 
-// Asigna el evento al formulario de Login
+// Asigna el evento al formulario de Login con VALIDACIÓN DE DOMINIO
 export function initLoginListeners() {
     const form = document.getElementById('login-form');
+    
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('email').value;
+            
+            const emailInput = document.getElementById('email');
             const password = document.getElementById('password').value;
             const btn = document.getElementById('btn-submit');
             
-            // Guardamos el texto original
+            const email = emailInput.value.trim().toLowerCase(); // Limpiamos espacios y pasamos a minúsculas
+
+            // 1. Definir los dominios permitidos (White List)
+            const allowedDomains = [
+                'gmail.com',
+                'outlook.com',
+                'hotmail.com',
+                'yahoo.com',
+                'icloud.com',
+                'proton.me',
+                'protonmail.com',
+                'naver.com',
+                'aol.com',
+                'live.com'
+            ];
+
+            // 2. Extraer el dominio del correo escrito
+            const emailParts = email.split('@');
+            
+            // Validación básica de formato (que tenga arroba y texto después)
+            if (emailParts.length !== 2 || !emailParts[1]) {
+                alert("Por favor, escribe un correo válido.");
+                return;
+            }
+
+            const domain = emailParts[1];
+
+            // 3. Verificar si el dominio está en nuestra lista
+            if (!allowedDomains.includes(domain)) {
+                alert(`🚫 Acceso restringido.\n\nSolo aceptamos correos de: \n${allowedDomains.join(', ')}`);
+                
+                // Efecto visual de error (borde rojo temporal)
+                emailInput.classList.add('border-red-500', 'text-red-500');
+                setTimeout(() => {
+                    emailInput.classList.remove('border-red-500', 'text-red-500');
+                }, 3000);
+                
+                return; // DETENEMOS LA EJECUCIÓN AQUÍ. No se envía nada a Supabase.
+            }
+
+            // Si pasa el guardia, continuamos con el login normal
             const originalText = btn.textContent;
             
             try {
@@ -42,10 +84,8 @@ export function initLoginListeners() {
                 btn.disabled = true;
                 
                 await handleLogin(email, password);
-                // Si todo sale bien, main.js cambiará la pantalla a Dashboard
                 
             } catch (error) {
-                // Si falla, restauramos el botón
                 btn.textContent = originalText;
                 btn.disabled = false;
             }
