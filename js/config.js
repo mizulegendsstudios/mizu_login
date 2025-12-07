@@ -1,3 +1,3 @@
 // Reemplaza esto con tus credenciales REALES de Supabase
-export const SUPABASE_URL = 'https://TU-PROYECTO.supabase.co';
-export const SUPABASE_KEY = 'TU-PUBLIC-ANON-KEY-AQUI';
+export const SUPABASE_URL = 'https://isjfnbzyoadoycqkesnr.supabase.co';
+export const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlzamZuYnp5b2Fkb3ljcWtlc25yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAxMjM3NzYsImV4cCI6MjA3NTY5OTc3Nn0.SxwL0joEKeN26X7BcwetbnhU3O0OlWFl-LNz_HIVbYI';
