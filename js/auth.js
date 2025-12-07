@@ -1,5 +1,7 @@
 import { supabase } from './supabase.js';
-import { loadDashboard } from './main.js'; // Referencia circular manejada con cuidado
+
+// NOTA: Ya no importamos nada de main.js para evitar el error de referencia circular.
+// La actualización de la pantalla la hará el listener en main.js automáticamente.
 
 // Función para iniciar sesión
 export async function handleLogin(email, password) {
@@ -10,9 +12,9 @@ export async function handleLogin(email, password) {
 
     if (error) {
         alert('Error en la maniobra: ' + error.message);
+        throw error; // Lanzamos el error para que el botón sepa que falló
     } else {
-        // El listener de onAuthStateChange en main.js detectará esto
-        console.log('Login exitoso:', data);
+        console.log('Login exitoso. Supabase notificará a main.js');
     }
 }
 
@@ -20,10 +22,9 @@ export async function handleLogin(email, password) {
 export async function handleLogout() {
     const { error } = await supabase.auth.signOut();
     if (error) console.error('Error al salir:', error);
-    // La página se recargará o main.js detectará el cambio
 }
 
-// Asigna el evento al formulario de Login (Se llama DESPUÉS de cargar login.html)
+// Asigna el evento al formulario de Login
 export function initLoginListeners() {
     const form = document.getElementById('login-form');
     if (form) {
@@ -33,18 +34,26 @@ export function initLoginListeners() {
             const password = document.getElementById('password').value;
             const btn = document.getElementById('btn-submit');
             
-            btn.textContent = 'Autenticando...';
-            btn.disabled = true;
+            // Guardamos el texto original
+            const originalText = btn.textContent;
             
-            await handleLogin(email, password);
-            
-            btn.textContent = 'Entrar';
-            btn.disabled = false;
+            try {
+                btn.textContent = 'Autenticando...';
+                btn.disabled = true;
+                
+                await handleLogin(email, password);
+                // Si todo sale bien, main.js cambiará la pantalla a Dashboard
+                
+            } catch (error) {
+                // Si falla, restauramos el botón
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
         });
     }
 }
 
-// Asigna el evento al botón de Logout (Se llama DESPUÉS de cargar dashboard.html)
+// Asigna el evento al botón de Logout
 export function initDashboardListeners() {
     const btn = document.getElementById('btn-logout');
     if (btn) {
