@@ -1,0 +1,24 @@
+<div class="w-full max-w-md bg-gray-800 p-8 rounded-lg shadow-2xl border border-gray-700 animate-fade-in-up">
+    <h2 class="text-2xl font-bold text-center mb-4 text-white">Recuperar Acceso</h2>
+    <p class="text-gray-400 text-center mb-6 text-sm">
+        Te enviaremos un enlace mágico a tu correo para restablecer tu contraseña.
+    </p>
+    
+    <form id="forgot-form" class="space-y-4">
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">Correo Electrónico</label>
+            <input type="email" id="forgot-email" placeholder="tu@dominio.com" required
+                class="w-full p-3 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-yellow-500 transition">
+        </div>
+        <button type="submit" id="btn-forgot"
+            class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded transition duration-300">
+            Enviar Enlace
+        </button>
+    </form>
+
+    <div class="mt-6 text-center">
+        <button id="link-to-login-2" class="text-blue-400 hover:text-blue-300 hover:underline text-sm focus:outline-none">
+            &larr; Volver al Login
+        </button>
+    </div>
+</div>
