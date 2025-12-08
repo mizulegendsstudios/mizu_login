@@ -7,10 +7,7 @@ import {
     initResetPasswordListeners
 } from './auth.js';
 
-/**
- * Carga el componente HTML en el contenedor principal y adjunta sus listeners.
- * @param {string} viewName - El nombre de la vista a cargar.
- */
+// --- SISTEMA DE CARGA DE VISTAS ---
 export async function loadView(viewName) {
     const containerId = 'app-container';
     let path = '';
@@ -47,43 +44,27 @@ export async function loadView(viewName) {
         if (!response.ok) throw new Error(`Fallo al cargar ${path}`);
         const html = await response.text();
         document.getElementById(containerId).innerHTML = html;
-        
-        // Ejecutar la lógica de eventos específica
         if (initFunction) initFunction();
-
     } catch (err) {
         console.error('Error al cargar la vista:', err);
     }
 }
 
-/**
- * Decide qué vista mostrar basado en el estado de autenticación y los parámetros de la URL.
- * @param {object | null} session - El objeto de sesión actual de Supabase.
- */
-export async function renderApp(session) {
+// --- LÓGICA PRINCIPAL DE ESTADO ---
+// Aceptamos 'event' como segundo parámetro para interceptar la señal de Supabase
+export async function renderApp(session, event = null) {
     
-    // 1. Verificar tokens de Supabase en el Query String (?)
-    const searchParams = new URLSearchParams(window.location.search);
-    const searchType = searchParams.get('type');
-    const searchAccessToken = searchParams.get('access_token');
-    
-    // 2. Verificar tokens en el HASH (#)
-    const hash = window.location.hash.substring(1); 
-    const hashParams = new URLSearchParams(hash);
-    const hashType = hashParams.get('type');
-    const hashAccessToken = hashParams.get('access_token');
-    
-    // INTERCEPCIÓN: Si encontramos 'recovery' o un token en cualquiera de los dos lugares.
-    if (searchType === 'recovery' || hashType === 'recovery' || searchAccessToken || hashAccessToken) { 
-        
+    console.log(`Evento: ${event}, Sesión: ${session ? 'Activa' : 'Inactiva'}`);
+
+    // 1. PRIORIDAD ABSOLUTA: Evento de Recuperación de Contraseña
+    // Si Supabase nos dice "Este usuario entró por recuperación", obedecemos.
+    if (event === 'PASSWORD_RECOVERY') {
+        console.log("🚨 ALERTA: Modo de Recuperación Detectado por Evento.");
         await loadView('reset-password');
-        
-        // Limpiamos los tokens de la URL después de la intercepción
-        window.history.replaceState(null, '', window.location.pathname);
-        return; 
+        return; // Detenemos aquí. No cargamos dashboard.
     }
 
-    // 3. Comportamiento normal (Cargar Login o Dashboard)
+    // 2. Comportamiento normal
     if (session) {
         await loadView('dashboard');
         const userEmailElement = document.getElementById('user-email');
@@ -95,27 +76,29 @@ export async function renderApp(session) {
     }
 }
 
-// Inicialización del motor de la aplicación
+// --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', async () => {
     
-    // Cargar Header y Footer
+    // Cargar componentes estáticos
     try {
         const headerRes = await fetch('./components/header.html');
         document.getElementById('header-container').innerHTML = await headerRes.text();
-        
         const footerRes = await fetch('./components/footer.html');
         document.getElementById('footer-container').innerHTML = await footerRes.text();
-    } catch (e) {
-        console.error("Error al cargar componentes estáticos.");
-    }
+    } catch (e) { console.error("Error cargando header/footer"); }
 
-    // Obtener estado inicial de la sesión
+    // Verificar sesión inicial (sin evento todavía)
     const { data: { session } } = await supabase.auth.getSession();
-    await renderApp(session);
+    
+    // NOTA: Al cargar la página por primera vez con el link de correo, 
+    // onAuthStateChange se disparará casi inmediatamente después.
+    // Por eso aquí solo renderizamos el estado base.
+    await renderApp(session); 
 
-    // Escuchar cualquier cambio de autenticación en tiempo real
+    // ESCUCHA DE EVENTOS EN VIVO
     supabase.auth.onAuthStateChange((event, session) => {
-        // Redibuja la aplicación si el estado de auth cambia
-        renderApp(session);
+        console.log("⚡ Cambio de estado detectado:", event);
+        // Pasamos el evento explícitamente a renderApp
+        renderApp(session, event);
     });
 });
