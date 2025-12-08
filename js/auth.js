@@ -41,12 +41,16 @@ async function handleResetPassword(email) {
 }
 
 async function handleNewPasswordSet(newPassword) {
-    // Actualizamos la contraseña del usuario logueado
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { data, error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
     
     alert('✅ Contraseña actualizada. Bienvenido de nuevo.');
-    // Forzamos la carga del dashboard tras el éxito
+    
+    // 🔑 CORRECCIÓN FINAL: SINCRONIZACIÓN FORZADA DEL USUARIO
+    // Esto asegura que la sesión tenga el objeto de usuario completo (incluyendo el email)
+    // antes de que el control pase a main.js para la renderización del dashboard.
+    await supabase.auth.getUser(); 
+    
     loadView('dashboard');
 }
 
@@ -54,7 +58,7 @@ export async function handleLogout() {
     await supabase.auth.signOut();
 }
 
-// --- LISTENERS ---
+// --- LISTENERS (sin cambios) ---
 
 export function initLoginListeners() {
     document.getElementById('link-register')?.addEventListener('click', () => loadView('register'));
@@ -139,7 +143,6 @@ export function initForgotListeners() {
     }
 }
 
-// Listener para el formulario de RESET PASSWORD (components/reset-password.html)
 export function initResetPasswordListeners() {
     const form = document.getElementById('reset-password-form');
     const msgElement = document.getElementById('reset-message');
