@@ -7,7 +7,8 @@ import {
     initResetPasswordListeners
 } from './auth.js';
 
-// --- ESTRATEGIA SNAPSHOT ---
+// --- ESTRATEGIA SNAPSHOT (CRÍTICO) ---
+// Capturamos la URL en el milisegundo 0 para prevenir que Supabase o el navegador la limpien.
 const INITIAL_URL = window.location.href;
 console.log("📸 FOTO INICIAL URL:", INITIAL_URL);
 
@@ -66,11 +67,11 @@ export async function renderApp(session, event = null) {
         console.log("🚨 DETECCIÓN POSITIVA: Modo Recuperación activado.");
         
         // --- CIRUGÍA: ALIMENTACIÓN MANUAL DE SESIÓN ---
-        // Si no hay sesión (porque falló el doble hash ##), la forzamos usando los datos de la URL.
+        // Si no hay sesión, la forzamos usando los tokens capturados.
         if (!session) {
             console.log("🛠️ Intentando reparación manual de sesión...");
             try {
-                // Obtenemos todo lo que está después del último '#'
+                // Función robusta para obtener el hash, incluso con ##
                 const hashFragment = urlToCheck.split('#').pop(); 
                 const params = new URLSearchParams(hashFragment);
                 const accessToken = params.get('access_token');
@@ -103,7 +104,8 @@ export async function renderApp(session, event = null) {
         await loadView('dashboard');
         const userEmailElement = document.getElementById('user-email');
         if (userEmailElement) {
-            userEmailElement.textContent = session.user.email;
+            // CORRECCIÓN FINAL: Usamos encadenamiento opcional para prevenir el error de visualización
+            userEmailElement.textContent = session?.user?.email || "Error al obtener el email del usuario."; 
         }
     } else {
         await loadView('login');
@@ -112,6 +114,8 @@ export async function renderApp(session, event = null) {
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', async () => {
+    
+    // Carga de estructura base
     try {
         const headerRes = await fetch('./components/header.html');
         document.getElementById('header-container').innerHTML = await headerRes.text();
@@ -119,11 +123,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('footer-container').innerHTML = await footerRes.text();
     } catch (e) { console.error("Error estático", e); }
 
+    // Obtenemos sesión
     const { data: { session } } = await supabase.auth.getSession();
+    
+    // Renderizamos la primera vista
     await renderApp(session); 
 
+    // Escuchamos eventos futuros
     supabase.auth.onAuthStateChange((event, session) => {
-        // Ignoramos el evento INITIAL_SESSION si ya detectamos recuperación para evitar parpadeos
+        // Si el evento es INITIAL_SESSION y la URL ya tiene el token, evitamos doble renderizado
         if (event === 'INITIAL_SESSION' && INITIAL_URL.includes('type=recovery')) return;
 
         if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
