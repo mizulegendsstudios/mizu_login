@@ -8,12 +8,12 @@ import {
 } from './auth.js';
 
 // --- ESTRATEGIA SNAPSHOT (CRÍTICO) ---
-// Capturamos la URL en el milisegundo 0 para prevenir que Supabase o el navegador la limpien.
 const INITIAL_URL = window.location.href;
 console.log("📸 FOTO INICIAL URL:", INITIAL_URL);
 
 // --- SISTEMA DE CARGA DE VISTAS ---
 export async function loadView(viewName) {
+    // ... (El código de loadView permanece sin cambios) ...
     const containerId = 'app-container';
     let path = '';
     let initFunction = null;
@@ -67,11 +67,9 @@ export async function renderApp(session, event = null) {
         console.log("🚨 DETECCIÓN POSITIVA: Modo Recuperación activado.");
         
         // --- CIRUGÍA: ALIMENTACIÓN MANUAL DE SESIÓN ---
-        // Si no hay sesión, la forzamos usando los tokens capturados.
         if (!session) {
             console.log("🛠️ Intentando reparación manual de sesión...");
             try {
-                // Función robusta para obtener el hash, incluso con ##
                 const hashFragment = urlToCheck.split('#').pop(); 
                 const params = new URLSearchParams(hashFragment);
                 const accessToken = params.get('access_token');
@@ -85,6 +83,9 @@ export async function renderApp(session, event = null) {
                     
                     if (!error) {
                         console.log("✅ Sesión restaurada manualmente con éxito.");
+                        // --- REFUERZO DE EMAIL: Forzamos la sincronización de la sesión ---
+                        await supabase.auth.getSession(); 
+                        // ------------------------------------------------------------------
                     } else {
                         console.error("❌ Fallo al restaurar sesión manualmente:", error);
                     }
@@ -101,12 +102,23 @@ export async function renderApp(session, event = null) {
 
     // 3. FLUJO NORMAL
     if (session) {
+        
+        // 🔑 SINCRONIZACIÓN FORZADA (Obtenemos el objeto de usuario más reciente)
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        
+        // Usamos el usuario fresco si está disponible, o el de la sesión.
+        const finalUser = user || session.user;
+
         await loadView('dashboard');
         const userEmailElement = document.getElementById('user-email');
-        if (userEmailElement) {
-            // CORRECCIÓN FINAL: Usamos encadenamiento opcional para prevenir el error de visualización
-            userEmailElement.textContent = session?.user?.email || "Error al obtener el email del usuario."; 
+
+        if (userEmailElement && finalUser) {
+            // Acceso seguro y con mensaje de fallback claro.
+            userEmailElement.textContent = finalUser?.email || "Email no disponible. Recarga o contáctanos."; 
+        } else if (userEmailElement) {
+            userEmailElement.textContent = "Sesión activa, error al cargar datos.";
         }
+        
     } else {
         await loadView('login');
     }
@@ -115,7 +127,6 @@ export async function renderApp(session, event = null) {
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', async () => {
     
-    // Carga de estructura base
     try {
         const headerRes = await fetch('./components/header.html');
         document.getElementById('header-container').innerHTML = await headerRes.text();
@@ -123,15 +134,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('footer-container').innerHTML = await footerRes.text();
     } catch (e) { console.error("Error estático", e); }
 
-    // Obtenemos sesión
     const { data: { session } } = await supabase.auth.getSession();
     
-    // Renderizamos la primera vista
     await renderApp(session); 
 
-    // Escuchamos eventos futuros
     supabase.auth.onAuthStateChange((event, session) => {
-        // Si el evento es INITIAL_SESSION y la URL ya tiene el token, evitamos doble renderizado
         if (event === 'INITIAL_SESSION' && INITIAL_URL.includes('type=recovery')) return;
 
         if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
