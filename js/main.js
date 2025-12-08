@@ -7,6 +7,12 @@ import {
     initResetPasswordListeners
 } from './auth.js';
 
+// --- ESTRATEGIA SNAPSHOT (CRÍTICO) ---
+// Capturamos la URL en el milisegundo 0, antes de que Supabase o el navegador la limpien.
+// Guardamos esto en una constante que nadie puede modificar.
+const INITIAL_URL = window.location.href;
+console.log("📸 FOTO INICIAL URL:", INITIAL_URL);
+
 // --- SISTEMA DE CARGA DE VISTAS ---
 export async function loadView(viewName) {
     const containerId = 'app-container';
@@ -50,21 +56,25 @@ export async function loadView(viewName) {
     }
 }
 
-// --- LÓGICA PRINCIPAL DE ESTADO ---
-// Aceptamos 'event' como segundo parámetro para interceptar la señal de Supabase
+// --- LÓGICA PRINCIPAL ---
 export async function renderApp(session, event = null) {
     
-    console.log(`Evento: ${event}, Sesión: ${session ? 'Activa' : 'Inactiva'}`);
-
-    // 1. PRIORIDAD ABSOLUTA: Evento de Recuperación de Contraseña
-    // Si Supabase nos dice "Este usuario entró por recuperación", obedecemos.
-    if (event === 'PASSWORD_RECOVERY') {
-        console.log("🚨 ALERTA: Modo de Recuperación Detectado por Evento.");
+    // 1. ANÁLISIS FORENSE DEL SNAPSHOT
+    // Usamos la variable INITIAL_URL que capturamos al principio, NO window.location actual
+    const urlToCheck = INITIAL_URL; 
+    
+    const hasRecoveryType = urlToCheck.includes('type=recovery');
+    // A veces Supabase usa 'type=signup' o solo el token, pero 'type=recovery' es el estándar para esto.
+    
+    // 2. INTERCEPCIÓN
+    // Si la URL original tenía "recovery" O el evento explícito es recuperación
+    if (hasRecoveryType || event === 'PASSWORD_RECOVERY') {
+        console.log("🚨 DETECCIÓN POSITIVA: Modo Recuperación activado.");
         await loadView('reset-password');
-        return; // Detenemos aquí. No cargamos dashboard.
+        return; 
     }
 
-    // 2. Comportamiento normal
+    // 3. FLUJO NORMAL
     if (session) {
         await loadView('dashboard');
         const userEmailElement = document.getElementById('user-email');
@@ -79,26 +89,28 @@ export async function renderApp(session, event = null) {
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', async () => {
     
-    // Cargar componentes estáticos
+    // Carga de estructura base
     try {
         const headerRes = await fetch('./components/header.html');
         document.getElementById('header-container').innerHTML = await headerRes.text();
         const footerRes = await fetch('./components/footer.html');
         document.getElementById('footer-container').innerHTML = await footerRes.text();
-    } catch (e) { console.error("Error cargando header/footer"); }
+    } catch (e) { console.error("Error estático", e); }
 
-    // Verificar sesión inicial (sin evento todavía)
+    // Obtenemos sesión
     const { data: { session } } = await supabase.auth.getSession();
     
-    // NOTA: Al cargar la página por primera vez con el link de correo, 
-    // onAuthStateChange se disparará casi inmediatamente después.
-    // Por eso aquí solo renderizamos el estado base.
+    // Renderizamos pasando SOLO la sesión inicial.
+    // La magia del INITIAL_URL dentro de renderApp hará el trabajo sucio.
     await renderApp(session); 
 
-    // ESCUCHA DE EVENTOS EN VIVO
+    // Escuchamos eventos futuros
     supabase.auth.onAuthStateChange((event, session) => {
-        console.log("⚡ Cambio de estado detectado:", event);
-        // Pasamos el evento explícitamente a renderApp
-        renderApp(session, event);
+        // Si el evento es SIGNED_IN (que ocurre al hacer clic en el link),
+        // renderApp volverá a ejecutarse. Como INITIAL_URL sigue teniendo "recovery",
+        // nos mantendrá en la página correcta.
+        if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+             renderApp(session, event);
+        }
     });
 });
