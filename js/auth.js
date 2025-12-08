@@ -1,22 +1,19 @@
 import { supabase } from './supabase.js';
-import { loadView } from './main.js'; // Importamos la función de navegación
+import { loadView } from './main.js';
 
-// --- UTILIDADES Y CONSTANTES ---
-
-// Lista de dominios permitidos (La Guardia Real)
+// --- CONFIGURACIÓN ---
 const ALLOWED_DOMAINS = [
     'gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 
     'icloud.com', 'proton.me', 'protonmail.com', 'naver.com', 'aol.com', 'live.com'
 ];
 
-// Validador reutilizable de dominio
 function validateDomain(email) {
     const parts = email.split('@');
     if (parts.length !== 2 || !parts[1]) return false;
     return ALLOWED_DOMAINS.includes(parts[1].toLowerCase());
 }
 
-// --- LOGICA SUPABASE ---
+// --- ACCIONES SUPABASE ---
 
 async function handleLogin(email, password) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -27,45 +24,38 @@ async function handleRegister(email, password) {
     const { error } = await supabase.auth.signUp({ 
         email, 
         password,
-        options: {
-            // Importante para la confirmación de correo
-            emailRedirectTo: window.location.href 
-        }
+        options: { emailRedirectTo: window.location.href }
     });
     if (error) throw error;
-    alert('¡Registro exitoso! Revisa tu correo para confirmar tu cuenta antes de entrar.');
-    loadView('login'); // Volver al login
+    alert('¡Registro exitoso! Revisa tu correo.');
+    loadView('login');
 }
 
 async function handleResetPassword(email) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        // Necesario para que el link de Supabase redirija correctamente a tu app
-        redirectTo: window.location.href, 
+        redirectTo: window.location.href, // Redirige a la raíz
     });
     if (error) throw error;
-    alert('Revisa tu correo. Te hemos enviado un enlace de recuperación.');
+    alert('Enlace enviado. Revisa tu correo.');
     loadView('login');
 }
 
 async function handleNewPasswordSet(newPassword) {
-    // Funciona porque el usuario está temporalmente autenticado por el token de URL
-    const { error } = await supabase.auth.updateUser({ 
-        password: newPassword 
-    });
-    
+    // Actualizamos la contraseña del usuario logueado
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
     
-    alert('✅ Contraseña actualizada con éxito. Ahora estás en el Dashboard.');
-    // La app ya está logueada, main.js se encargará de renderizar el dashboard
+    alert('✅ Contraseña actualizada. Bienvenido de nuevo.');
+    // Forzamos la carga del dashboard tras el éxito
+    loadView('dashboard');
 }
 
 export async function handleLogout() {
     await supabase.auth.signOut();
 }
 
-// --- LISTENERS (Controladores de Eventos) ---
+// --- LISTENERS ---
 
-// 1. VISTA LOGIN
 export function initLoginListeners() {
     document.getElementById('link-register')?.addEventListener('click', () => loadView('register'));
     document.getElementById('link-forgot')?.addEventListener('click', () => loadView('forgot'));
@@ -79,7 +69,7 @@ export function initLoginListeners() {
             const btn = document.getElementById('btn-submit');
 
             if (!validateDomain(email)) {
-                alert(`🚫 Dominio no permitido. Solo: ${ALLOWED_DOMAINS.join(', ')}`);
+                alert(`Dominio no permitido.`);
                 return;
             }
 
@@ -97,10 +87,8 @@ export function initLoginListeners() {
     }
 }
 
-// 2. VISTA REGISTRO
 export function initRegisterListeners() {
     document.getElementById('link-to-login')?.addEventListener('click', () => loadView('login'));
-
     const form = document.getElementById('register-form');
     if (form) {
         form.addEventListener('submit', async (e) => {
@@ -109,15 +97,8 @@ export function initRegisterListeners() {
             const password = document.getElementById('reg-password').value;
             const btn = document.getElementById('btn-register');
 
-            if (!validateDomain(email)) {
-                alert(`🚫 Dominio no permitido. Solo: ${ALLOWED_DOMAINS.join(', ')}`);
-                return;
-            }
-
-            if (password.length < 6) {
-                alert("La contraseña debe tener al menos 6 caracteres.");
-                return;
-            }
+            if (!validateDomain(email)) return alert("Dominio no permitido");
+            if (password.length < 6) return alert("Mínimo 6 caracteres");
 
             const originalText = btn.textContent;
             try {
@@ -133,21 +114,16 @@ export function initRegisterListeners() {
     }
 }
 
-// 3. VISTA OLVIDÉ CONTRASEÑA
 export function initForgotListeners() {
     document.getElementById('link-to-login-2')?.addEventListener('click', () => loadView('login'));
-
     const form = document.getElementById('forgot-form');
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('forgot-email').value.trim();
             const btn = document.getElementById('btn-forgot');
-
-            if (!validateDomain(email)) {
-                alert("Correo inválido o dominio no permitido.");
-                return;
-            }
+            
+            if (!validateDomain(email)) return alert("Correo inválido");
 
             const originalText = btn.textContent;
             try {
@@ -163,7 +139,7 @@ export function initForgotListeners() {
     }
 }
 
-// 4. VISTA CAMBIAR CONTRASEÑA (INTERCEPCCIÓN DE URL)
+// Listener para el formulario de RESET PASSWORD (components/reset-password.html)
 export function initResetPasswordListeners() {
     const form = document.getElementById('reset-password-form');
     const msgElement = document.getElementById('reset-message');
@@ -184,7 +160,7 @@ export function initResetPasswordListeners() {
                 return;
             }
             if (newPassword.length < 6) {
-                msgElement.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+                msgElement.textContent = 'Mínimo 6 caracteres.';
                 msgElement.classList.remove('hidden');
                 return;
             }
@@ -204,8 +180,6 @@ export function initResetPasswordListeners() {
     }
 }
 
-
-// 5. VISTA DASHBOARD
 export function initDashboardListeners() {
     document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
 }
