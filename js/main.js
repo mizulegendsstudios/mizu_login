@@ -7,9 +7,7 @@ import {
     initResetPasswordListeners
 } from './auth.js';
 
-// --- ESTRATEGIA SNAPSHOT (CRÍTICO) ---
-// Capturamos la URL en el milisegundo 0, antes de que Supabase o el navegador la limpien.
-// Guardamos esto en una constante que nadie puede modificar.
+// --- ESTRATEGIA SNAPSHOT ---
 const INITIAL_URL = window.location.href;
 console.log("📸 FOTO INICIAL URL:", INITIAL_URL);
 
@@ -59,17 +57,43 @@ export async function loadView(viewName) {
 // --- LÓGICA PRINCIPAL ---
 export async function renderApp(session, event = null) {
     
-    // 1. ANÁLISIS FORENSE DEL SNAPSHOT
-    // Usamos la variable INITIAL_URL que capturamos al principio, NO window.location actual
+    // 1. ANÁLISIS FORENSE
     const urlToCheck = INITIAL_URL; 
-    
     const hasRecoveryType = urlToCheck.includes('type=recovery');
-    // A veces Supabase usa 'type=signup' o solo el token, pero 'type=recovery' es el estándar para esto.
     
-    // 2. INTERCEPCIÓN
-    // Si la URL original tenía "recovery" O el evento explícito es recuperación
+    // 2. INTERCEPCIÓN Y REPARACIÓN MANUAL
     if (hasRecoveryType || event === 'PASSWORD_RECOVERY') {
         console.log("🚨 DETECCIÓN POSITIVA: Modo Recuperación activado.");
+        
+        // --- CIRUGÍA: ALIMENTACIÓN MANUAL DE SESIÓN ---
+        // Si no hay sesión (porque falló el doble hash ##), la forzamos usando los datos de la URL.
+        if (!session) {
+            console.log("🛠️ Intentando reparación manual de sesión...");
+            try {
+                // Obtenemos todo lo que está después del último '#'
+                const hashFragment = urlToCheck.split('#').pop(); 
+                const params = new URLSearchParams(hashFragment);
+                const accessToken = params.get('access_token');
+                const refreshToken = params.get('refresh_token');
+
+                if (accessToken && refreshToken) {
+                    const { error } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken
+                    });
+                    
+                    if (!error) {
+                        console.log("✅ Sesión restaurada manualmente con éxito.");
+                    } else {
+                        console.error("❌ Fallo al restaurar sesión manualmente:", error);
+                    }
+                }
+            } catch (err) {
+                console.error("Error parseando tokens:", err);
+            }
+        }
+        // ------------------------------------------------
+
         await loadView('reset-password');
         return; 
     }
@@ -88,8 +112,6 @@ export async function renderApp(session, event = null) {
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', async () => {
-    
-    // Carga de estructura base
     try {
         const headerRes = await fetch('./components/header.html');
         document.getElementById('header-container').innerHTML = await headerRes.text();
@@ -97,19 +119,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('footer-container').innerHTML = await footerRes.text();
     } catch (e) { console.error("Error estático", e); }
 
-    // Obtenemos sesión
     const { data: { session } } = await supabase.auth.getSession();
-    
-    // Renderizamos pasando SOLO la sesión inicial.
-    // La magia del INITIAL_URL dentro de renderApp hará el trabajo sucio.
     await renderApp(session); 
 
-    // Escuchamos eventos futuros
     supabase.auth.onAuthStateChange((event, session) => {
-        // Si el evento es SIGNED_IN (que ocurre al hacer clic en el link),
-        // renderApp volverá a ejecutarse. Como INITIAL_URL sigue teniendo "recovery",
-        // nos mantendrá en la página correcta.
-        if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        // Ignoramos el evento INITIAL_SESSION si ya detectamos recuperación para evitar parpadeos
+        if (event === 'INITIAL_SESSION' && INITIAL_URL.includes('type=recovery')) return;
+
+        if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
              renderApp(session, event);
         }
     });
