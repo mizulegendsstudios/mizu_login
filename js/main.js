@@ -7,13 +7,15 @@ import {
     initResetPasswordListeners
 } from './auth.js';
 
-// Función genérica para cargar componentes HTML en el contenedor principal
+/**
+ * Carga el componente HTML en el contenedor principal y adjunta sus listeners.
+ * @param {string} viewName - El nombre de la vista a cargar.
+ */
 export async function loadView(viewName) {
     const containerId = 'app-container';
     let path = '';
     let initFunction = null;
 
-    // Asignación de ruta y función de inicialización para todas las vistas
     switch (viewName) {
         case 'login':
             path = './components/login.html';
@@ -40,13 +42,13 @@ export async function loadView(viewName) {
             return;
     }
 
-    // Carga del componente y ejecución de la lógica
     try {
         const response = await fetch(path);
         if (!response.ok) throw new Error(`Fallo al cargar ${path}`);
         const html = await response.text();
         document.getElementById(containerId).innerHTML = html;
         
+        // Ejecutar la lógica de eventos específica
         if (initFunction) initFunction();
 
     } catch (err) {
@@ -54,28 +56,34 @@ export async function loadView(viewName) {
     }
 }
 
-// Decide qué vista cargar basada en el estado de autenticación y la URL
+/**
+ * Decide qué vista mostrar basado en el estado de autenticación y los parámetros de la URL.
+ * @param {object | null} session - El objeto de sesión actual de Supabase.
+ */
 export async function renderApp(session) {
     
-    // 1. REVISIÓN CRÍTICA: Buscar tokens de Supabase en el Query String (?)
-    // Esto intercepta el redireccionamiento después de hacer clic en el email.
-    const params = new URLSearchParams(window.location.search);
-    const type = params.get('type');
-    const accessToken = params.get('access_token');
+    // 1. Verificar tokens de Supabase en el Query String (?)
+    const searchParams = new URLSearchParams(window.location.search);
+    const searchType = searchParams.get('type');
+    const searchAccessToken = searchParams.get('access_token');
     
-    // Si encontramos el token de recuperación (recovery) O el token de acceso (access_token),
-    // asumimos que es el flujo de recuperación y cargamos la vista de reseteo.
-    if (type === 'recovery' || accessToken) {
+    // 2. Verificar tokens en el HASH (#)
+    const hash = window.location.hash.substring(1); 
+    const hashParams = new URLSearchParams(hash);
+    const hashType = hashParams.get('type');
+    const hashAccessToken = hashParams.get('access_token');
+    
+    // INTERCEPCIÓN: Si encontramos 'recovery' o un token en cualquiera de los dos lugares.
+    if (searchType === 'recovery' || hashType === 'recovery' || searchAccessToken || hashAccessToken) { 
         
-        console.log("INTERCEPCIÓN DE URL: Cargando formulario de reseteo.");
         await loadView('reset-password');
         
-        // Limpiamos la URL de los tokens después de la carga
+        // Limpiamos los tokens de la URL después de la intercepción
         window.history.replaceState(null, '', window.location.pathname);
         return; 
     }
 
-    // 2. Comportamiento normal
+    // 3. Comportamiento normal (Cargar Login o Dashboard)
     if (session) {
         await loadView('dashboard');
         const userEmailElement = document.getElementById('user-email');
@@ -98,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const footerRes = await fetch('./components/footer.html');
         document.getElementById('footer-container').innerHTML = await footerRes.text();
     } catch (e) {
-        console.error("Asegúrate de que components/header.html y footer.html existan.");
+        console.error("Error al cargar componentes estáticos.");
     }
 
     // Obtener estado inicial de la sesión
