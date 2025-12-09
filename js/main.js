@@ -57,36 +57,21 @@ export async function loadView(viewName) {
 // --- LÓGICA PRINCIPAL ---
 export async function renderApp(session, event = null) {
     
-    // Detectamos si hay intención de recuperación
+    // 1. DETECCIÓN: ¿Es esto un intento de recuperación?
     const urlToCheck = INITIAL_URL; 
-    const hasRecoveryToken = urlToCheck.includes('access_token') && urlToCheck.includes('type=recovery');
-    const isRecoveryEvent = event === 'PASSWORD_RECOVERY';
     
-    // --- LÓGICA DE PRIORIDAD (Aquí rompemos el bucle) ---
-    
-    // CASO 1: Sesión activa NORMAL.
-    // Si tenemos sesión y NO es un evento explícito de recuperación, vamos al Dashboard.
-    // Esto evita que un token viejo en INITIAL_URL nos secuestre si ya estamos logueados bien.
-    if (session && !isRecoveryEvent) {
+    // Buscamos 'type=recovery'. Esta es la bandera maestra.
+    // También buscamos 'access_token' por si acaso, pero 'type=recovery' es lo que distingue
+    // un "login por recuperación" de un "login mágico" o normal.
+    const isRecoveryFlow = urlToCheck.includes('type=recovery') || event === 'PASSWORD_RECOVERY';
+
+    // 2. PRIORIDAD MÁXIMA: MODO RECUPERACIÓN
+    // Si detectamos recuperación, MOSTRAMOS el reset password,
+    // NO IMPORTA si ya existe una sesión (Supabase auto-loguea, así que es normal tener sesión).
+    if (isRecoveryFlow) {
+        console.log("🚨 PRIORIDAD: Modo Recuperación activado. Ignorando Dashboard.");
         
-        // Sincronización de seguridad para asegurar el email
-        const { data: { user } } = await supabase.auth.getUser();
-        const finalUser = user || session.user;
-
-        await loadView('dashboard');
-        const userEmailElement = document.getElementById('user-email');
-
-        if (userEmailElement) {
-            userEmailElement.textContent = finalUser?.email || "Cargando..."; 
-        }
-        return;
-    }
-
-    // CASO 2: Modo Recuperación (Solo si NO hay sesión o si el evento lo manda)
-    if (hasRecoveryToken || isRecoveryEvent) {
-        console.log("🚨 DETECCIÓN POSITIVA: Modo Recuperación activado.");
-        
-        // Reparación manual de sesión si es necesaria
+        // Reparación manual de sesión SOLO si Supabase falló en el auto-login (el caso ##)
         if (!session) {
             console.log("🛠️ Intentando reparación manual de sesión...");
             try {
@@ -108,10 +93,25 @@ export async function renderApp(session, event = null) {
         }
 
         await loadView('reset-password');
-        return; 
+        return; // DETENEMOS AQUÍ para que no cargue el dashboard
     }
 
-    // CASO 3: Usuario no logueado -> Login
+    // 3. PRIORIDAD SECUNDARIA: SESIÓN NORMAL
+    // Solo llegamos aquí si NO es un flujo de recuperación.
+    if (session) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const finalUser = user || session.user;
+
+        await loadView('dashboard');
+        const userEmailElement = document.getElementById('user-email');
+
+        if (userEmailElement) {
+            userEmailElement.textContent = finalUser?.email || "Cargando..."; 
+        }
+        return;
+    }
+
+    // 4. SI NADA DE LO ANTERIOR: LOGIN
     await loadView('login');
 }
 
@@ -130,8 +130,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderApp(session); 
 
     supabase.auth.onAuthStateChange((event, session) => {
-        // Ignoramos INITIAL_SESSION si tenemos un token de recuperación pendiente
-        // para dejar que la lógica de renderApp maneje la reparación manual.
+        // Ignoramos INITIAL_SESSION si estamos en modo recuperación
+        // para evitar que la detección de sesión nos saque de la pantalla de reset.
         if (event === 'INITIAL_SESSION' && INITIAL_URL.includes('type=recovery')) return;
 
         renderApp(session, event);
