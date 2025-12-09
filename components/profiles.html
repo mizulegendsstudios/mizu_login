@@ -1,0 +1,33 @@
+<div class="w-full max-w-4xl mx-auto p-4 animate-fade-in-up">
+    <h2 class="text-4xl font-bold text-center mb-8 text-white tracking-wider">¿Quién está jugando hoy?</h2>
+    
+    <div id="profiles-grid" class="grid grid-cols-2 md:grid-cols-4 gap-6 justify-center items-start mb-12">
+        </div>
+
+    <div class="max-w-md mx-auto bg-gray-800 p-6 rounded-lg border border-gray-700">
+        <h3 class="text-lg font-semibold text-gray-300 mb-4 text-center">Forjar nueva identidad</h3>
+        <form id="create-profile-form" class="flex flex-col gap-3">
+            <input type="text" id="new-nickname" placeholder="Nickname (ej. FakerSmurf)" required maxlength="15"
+                class="p-2 rounded bg-gray-900 border border-gray-600 text-white focus:border-blue-500 outline-none">
+            
+            <select id="new-role" class="p-2 rounded bg-gray-900 border border-gray-600 text-white outline-none">
+                <option value="Top">Top Lane</option>
+                <option value="Jungle">Jungle</option>
+                <option value="Mid">Mid Lane</option>
+                <option value="ADC">ADC</option>
+                <option value="Support">Support</option>
+                <option value="Flex">Flex / Fill</option>
+            </select>
+
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded transition">
+                Crear Perfil
+            </button>
+        </form>
+    </div>
+    
+    <div class="text-center mt-12">
+        <button id="btn-logout-profiles" class="text-gray-500 hover:text-white border border-gray-600 px-4 py-1 rounded text-sm transition">
+            Cerrar Sesión Maestra
+        </button>
+    </div>
+</div>
