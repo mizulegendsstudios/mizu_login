@@ -46,9 +46,11 @@ async function handleNewPasswordSet(newPassword) {
     
     alert('✅ Contraseña actualizada. Bienvenido de nuevo.');
     
-    // 🔑 CORRECCIÓN FINAL: SINCRONIZACIÓN FORZADA DEL USUARIO
-    // Esto asegura que la sesión tenga el objeto de usuario completo (incluyendo el email)
-    // antes de que el control pase a main.js para la renderización del dashboard.
+    // 💥 CRÍTICO UX: BORRAR EL TOKEN DE LA URL 
+    // Esto rompe el bucle y elimina la evidencia que mantiene a la pestaña en modo "reset".
+    window.history.replaceState({}, document.title, window.location.pathname);
+    
+    // Forzamos la obtención de la sesión/usuario actualizada para sincronizar el email
     await supabase.auth.getUser(); 
     
     loadView('dashboard');
