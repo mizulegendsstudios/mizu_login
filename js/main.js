@@ -7,7 +7,10 @@ import {
     initResetPasswordListeners
 } from './auth.js';
 
-// --- ESTRATEGIA SNAPSHOT ---
+// Importamos la nueva lógica y la variable de estado del perfil
+import { initProfilesListeners, activeProfile } from './profiles.js';
+
+// --- ESTRATEGIA SNAPSHOT (Necesaria para manejar el token de recuperación) ---
 const INITIAL_URL = window.location.href;
 console.log("📸 FOTO INICIAL URL:", INITIAL_URL);
 
@@ -18,29 +21,19 @@ export async function loadView(viewName) {
     let initFunction = null;
 
     switch (viewName) {
-        case 'login':
-            path = './components/login.html';
-            initFunction = initLoginListeners;
+        case 'login': path = './components/login.html'; initFunction = initLoginListeners; break;
+        case 'register': path = './components/register.html'; initFunction = initRegisterListeners; break;
+        case 'forgot': path = './components/forgot.html'; initFunction = initForgotListeners; break;
+        case 'reset-password': path = './components/reset-password.html'; initFunction = initResetPasswordListeners; break;
+        
+        // NUEVA RUTA DE PERFILES
+        case 'profiles': 
+            path = './components/profiles.html'; 
+            initFunction = initProfilesListeners; 
             break;
-        case 'register':
-            path = './components/register.html';
-            initFunction = initRegisterListeners;
-            break;
-        case 'forgot':
-            path = './components/forgot.html';
-            initFunction = initForgotListeners;
-            break;
-        case 'reset-password': 
-            path = './components/reset-password.html';
-            initFunction = initResetPasswordListeners;
-            break;
-        case 'dashboard':
-            path = './components/dashboard.html';
-            initFunction = initDashboardListeners;
-            break;
-        default:
-            console.error('Vista no reconocida:', viewName);
-            return;
+            
+        case 'dashboard': path = './components/dashboard.html'; initFunction = initDashboardListeners; break;
+        default: console.error('Vista no reconocida:', viewName); return;
     }
 
     try {
@@ -57,23 +50,15 @@ export async function loadView(viewName) {
 // --- LÓGICA PRINCIPAL ---
 export async function renderApp(session, event = null) {
     
-    // 1. DETECCIÓN: ¿Es esto un intento de recuperación?
+    // 1. PRIORIDAD MÁXIMA: MODO RECUPERACIÓN (Mantiene la solución anterior)
     const urlToCheck = INITIAL_URL; 
-    
-    // Buscamos 'type=recovery'. Esta es la bandera maestra.
-    // También buscamos 'access_token' por si acaso, pero 'type=recovery' es lo que distingue
-    // un "login por recuperación" de un "login mágico" o normal.
     const isRecoveryFlow = urlToCheck.includes('type=recovery') || event === 'PASSWORD_RECOVERY';
 
-    // 2. PRIORIDAD MÁXIMA: MODO RECUPERACIÓN
-    // Si detectamos recuperación, MOSTRAMOS el reset password,
-    // NO IMPORTA si ya existe una sesión (Supabase auto-loguea, así que es normal tener sesión).
     if (isRecoveryFlow) {
-        console.log("🚨 PRIORIDAD: Modo Recuperación activado. Ignorando Dashboard.");
+        console.log("🚨 PRIORIDAD: Modo Recuperación activado.");
         
-        // Reparación manual de sesión SOLO si Supabase falló en el auto-login (el caso ##)
+        // Reparación manual de sesión si es necesaria
         if (!session) {
-            console.log("🛠️ Intentando reparación manual de sesión...");
             try {
                 const hashFragment = urlToCheck.split('#').pop(); 
                 const params = new URLSearchParams(hashFragment);
@@ -85,7 +70,6 @@ export async function renderApp(session, event = null) {
                         access_token: accessToken,
                         refresh_token: refreshToken
                     });
-                    console.log("✅ Sesión restaurada manualmente.");
                 }
             } catch (err) {
                 console.error("Error parseando tokens:", err);
@@ -93,45 +77,59 @@ export async function renderApp(session, event = null) {
         }
 
         await loadView('reset-password');
-        return; // DETENEMOS AQUÍ para que no cargue el dashboard
+        return; 
     }
 
-    // 3. PRIORIDAD SECUNDARIA: SESIÓN NORMAL
-    // Solo llegamos aquí si NO es un flujo de recuperación.
+    // 2. PRIORIDAD SECUNDARIA: SESIÓN NORMAL
     if (session) {
-        const { data: { user } } = await supabase.auth.getUser();
-        const finalUser = user || session.user;
+        
+        // 🔑 NUEVO: Comprobamos si hay un perfil activo
+        if (activeProfile) {
+            // SÍ: Perfil activo, vamos al Dashboard
+            
+            // Sincronización de seguridad para asegurar el email (en caso de que se necesite)
+            const { data: { user } } = await supabase.auth.getUser();
+            const finalUser = user || session.user;
 
-        await loadView('dashboard');
-        const userEmailElement = document.getElementById('user-email');
-
-        if (userEmailElement) {
-            userEmailElement.textContent = finalUser?.email || "Cargando..."; 
+            await loadView('dashboard');
+            
+            // Inyectar datos del perfil en el dashboard inmediatamente
+            const profileNameElement = document.getElementById('profile-name');
+            const profileRoleElement = document.getElementById('profile-role');
+            
+            if (profileNameElement) profileNameElement.textContent = activeProfile.nickname;
+            if (profileRoleElement) profileRoleElement.textContent = activeProfile.role;
+            
+        } else {
+            // NO: Hay sesión, pero falta elegir el perfil
+            await loadView('profiles');
         }
         return;
     }
 
-    // 4. SI NADA DE LO ANTERIOR: LOGIN
+    // 3. Si nada de lo anterior: LOGIN
     await loadView('login');
 }
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', async () => {
     
+    // Carga de estructura base (Header/Footer)
     try {
         const headerRes = await fetch('./components/header.html');
         document.getElementById('header-container').innerHTML = await headerRes.text();
         const footerRes = await fetch('./components/footer.html');
         document.getElementById('footer-container').innerHTML = await footerRes.text();
-    } catch (e) { console.error("Error estático", e); }
+    } catch (e) { console.error("Error al cargar componentes estáticos", e); }
 
+    // Obtenemos sesión
     const { data: { session } } = await supabase.auth.getSession();
     
+    // Renderizamos la primera vista
     await renderApp(session); 
 
+    // Escuchamos eventos futuros
     supabase.auth.onAuthStateChange((event, session) => {
-        // Ignoramos INITIAL_SESSION si estamos en modo recuperación
-        // para evitar que la detección de sesión nos saque de la pantalla de reset.
         if (event === 'INITIAL_SESSION' && INITIAL_URL.includes('type=recovery')) return;
 
         renderApp(session, event);
