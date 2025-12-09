@@ -33,7 +33,7 @@ async function handleRegister(email, password) {
 
 async function handleResetPassword(email) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.href, // Redirige a la raíz
+        redirectTo: window.location.href, 
     });
     if (error) throw error;
     alert('Enlace enviado. Revisa tu correo.');
@@ -41,26 +41,23 @@ async function handleResetPassword(email) {
 }
 
 async function handleNewPasswordSet(newPassword) {
-    const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
     
-    alert('✅ Contraseña actualizada. Bienvenido de nuevo.');
+    alert('✅ Contraseña actualizada correctamente.');
     
-    // 💥 CRÍTICO UX: BORRAR EL TOKEN DE LA URL 
-    // Esto rompe el bucle y elimina la evidencia que mantiene a la pestaña en modo "reset".
-    window.history.replaceState({}, document.title, window.location.pathname);
-    
-    // Forzamos la obtención de la sesión/usuario actualizada para sincronizar el email
-    await supabase.auth.getUser(); 
-    
-    loadView('dashboard');
+    // 🔥 ESTRATEGIA TIERRA QUEMADA:
+    // En lugar de intentar navegar internamente, forzamos una recarga completa
+    // hacia la página principal limpia. Esto borra la memoria del token y 
+    // obliga a Supabase a cargar la sesión fresca desde el disco.
+    window.location.href = window.location.pathname; 
 }
 
 export async function handleLogout() {
     await supabase.auth.signOut();
 }
 
-// --- LISTENERS (sin cambios) ---
+// --- LISTENERS ---
 
 export function initLoginListeners() {
     document.getElementById('link-register')?.addEventListener('click', () => loadView('register'));
