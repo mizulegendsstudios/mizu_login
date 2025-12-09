@@ -7,13 +7,12 @@ import {
     initResetPasswordListeners
 } from './auth.js';
 
-// --- ESTRATEGIA SNAPSHOT (CRÍTICO) ---
+// --- ESTRATEGIA SNAPSHOT ---
 const INITIAL_URL = window.location.href;
 console.log("📸 FOTO INICIAL URL:", INITIAL_URL);
 
 // --- SISTEMA DE CARGA DE VISTAS ---
 export async function loadView(viewName) {
-    // ... (El código de loadView permanece sin cambios) ...
     const containerId = 'app-container';
     let path = '';
     let initFunction = null;
@@ -58,15 +57,36 @@ export async function loadView(viewName) {
 // --- LÓGICA PRINCIPAL ---
 export async function renderApp(session, event = null) {
     
-    // 1. ANÁLISIS FORENSE
+    // Detectamos si hay intención de recuperación
     const urlToCheck = INITIAL_URL; 
-    const hasRecoveryType = urlToCheck.includes('type=recovery');
+    const hasRecoveryToken = urlToCheck.includes('access_token') && urlToCheck.includes('type=recovery');
+    const isRecoveryEvent = event === 'PASSWORD_RECOVERY';
     
-    // 2. INTERCEPCIÓN Y REPARACIÓN MANUAL
-    if (hasRecoveryType || event === 'PASSWORD_RECOVERY') {
+    // --- LÓGICA DE PRIORIDAD (Aquí rompemos el bucle) ---
+    
+    // CASO 1: Sesión activa NORMAL.
+    // Si tenemos sesión y NO es un evento explícito de recuperación, vamos al Dashboard.
+    // Esto evita que un token viejo en INITIAL_URL nos secuestre si ya estamos logueados bien.
+    if (session && !isRecoveryEvent) {
+        
+        // Sincronización de seguridad para asegurar el email
+        const { data: { user } } = await supabase.auth.getUser();
+        const finalUser = user || session.user;
+
+        await loadView('dashboard');
+        const userEmailElement = document.getElementById('user-email');
+
+        if (userEmailElement) {
+            userEmailElement.textContent = finalUser?.email || "Cargando..."; 
+        }
+        return;
+    }
+
+    // CASO 2: Modo Recuperación (Solo si NO hay sesión o si el evento lo manda)
+    if (hasRecoveryToken || isRecoveryEvent) {
         console.log("🚨 DETECCIÓN POSITIVA: Modo Recuperación activado.");
         
-        // --- CIRUGÍA: ALIMENTACIÓN MANUAL DE SESIÓN ---
+        // Reparación manual de sesión si es necesaria
         if (!session) {
             console.log("🛠️ Intentando reparación manual de sesión...");
             try {
@@ -76,52 +96,23 @@ export async function renderApp(session, event = null) {
                 const refreshToken = params.get('refresh_token');
 
                 if (accessToken && refreshToken) {
-                    const { error } = await supabase.auth.setSession({
+                    await supabase.auth.setSession({
                         access_token: accessToken,
                         refresh_token: refreshToken
                     });
-                    
-                    if (!error) {
-                        console.log("✅ Sesión restaurada manualmente con éxito.");
-                        // --- REFUERZO DE EMAIL: Forzamos la sincronización de la sesión ---
-                        await supabase.auth.getSession(); 
-                        // ------------------------------------------------------------------
-                    } else {
-                        console.error("❌ Fallo al restaurar sesión manualmente:", error);
-                    }
+                    console.log("✅ Sesión restaurada manualmente.");
                 }
             } catch (err) {
                 console.error("Error parseando tokens:", err);
             }
         }
-        // ------------------------------------------------
 
         await loadView('reset-password');
         return; 
     }
 
-    // 3. FLUJO NORMAL
-    if (session) {
-        
-        // 🔑 SINCRONIZACIÓN FORZADA (Obtenemos el objeto de usuario más reciente)
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
-        // Usamos el usuario fresco si está disponible, o el de la sesión.
-        const finalUser = user || session.user;
-
-        await loadView('dashboard');
-        const userEmailElement = document.getElementById('user-email');
-
-        if (userEmailElement && finalUser) {
-            // Acceso seguro y con mensaje de fallback claro.
-            userEmailElement.textContent = finalUser?.email || "Email no disponible. Recarga o contáctanos."; 
-        } else if (userEmailElement) {
-            userEmailElement.textContent = "Sesión activa, error al cargar datos.";
-        }
-        
-    } else {
-        await loadView('login');
-    }
+    // CASO 3: Usuario no logueado -> Login
+    await loadView('login');
 }
 
 // --- INICIALIZACIÓN ---
@@ -139,10 +130,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderApp(session); 
 
     supabase.auth.onAuthStateChange((event, session) => {
+        // Ignoramos INITIAL_SESSION si tenemos un token de recuperación pendiente
+        // para dejar que la lógica de renderApp maneje la reparación manual.
         if (event === 'INITIAL_SESSION' && INITIAL_URL.includes('type=recovery')) return;
 
-        if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
-             renderApp(session, event);
-        }
+        renderApp(session, event);
     });
 });
