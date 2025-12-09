@@ -1,7 +1,6 @@
 import { supabase } from './supabase.js';
 import { loadView } from './main.js';
 
-// --- CONFIGURACIÓN ---
 const ALLOWED_DOMAINS = [
     'gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 
     'icloud.com', 'proton.me', 'protonmail.com', 'naver.com', 'aol.com', 'live.com'
@@ -46,15 +45,16 @@ async function handleNewPasswordSet(newPassword) {
     
     alert('✅ Contraseña actualizada correctamente.');
     
-    // 🔥 ESTRATEGIA TIERRA QUEMADA:
-    // En lugar de intentar navegar internamente, forzamos una recarga completa
-    // hacia la página principal limpia. Esto borra la memoria del token y 
-    // obliga a Supabase a cargar la sesión fresca desde el disco.
+    // --- PUNTO DE QUIEBRE DEL BUCLE ---
+    // Recargamos la página hacia la raíz limpia.
+    // Esto borra el INITIAL_URL de la memoria.
     window.location.href = window.location.pathname; 
 }
 
 export async function handleLogout() {
     await supabase.auth.signOut();
+    // Opcional: Recargar al salir también limpia cualquier estado residual
+    window.location.reload();
 }
 
 // --- LISTENERS ---
@@ -184,4 +184,4 @@ export function initResetPasswordListeners() {
 
 export function initDashboardListeners() {
     document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
-}
+} 
