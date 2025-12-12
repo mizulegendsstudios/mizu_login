@@ -5,7 +5,7 @@ import { handleLogout } from './auth.js';
 // Variable para guardar el perfil seleccionado actualmente en memoria
 export let activeProfile = null;
 
-// --- FUNCIONES PRINCIPALES ---
+// --- FUNCIONES DB Y LÓGICA ---
 
 async function fetchProfiles() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -36,14 +36,13 @@ async function createProfile(nickname, role) {
 
 function selectProfile(profile) {
     console.log("Perfil seleccionado:", profile.nickname);
-    activeProfile = profile; // Guardamos el perfil en memoria
-    loadView('dashboard');   // Avanzamos al dashboard
+    activeProfile = profile; 
+    loadView('dashboard');   
 }
 
 // --- RENDERIZADO ---
 
 function renderProfileCard(profile) {
-    // Generamos un avatar aleatorio basado en el nombre (usando API de dicebear)
     const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.nickname}`;
 
     const card = document.createElement('div');
@@ -62,18 +61,16 @@ function renderProfileCard(profile) {
     return card;
 }
 
-// --- LISTENER EXPORTADO ---
-
-export async function initProfilesListeners() {
-    // 1. Configurar botón de logout global
-    document.getElementById('btn-logout-profiles')?.addEventListener('click', handleLogout);
-
-    // 2. Cargar y Pintar perfiles
+/**
+ * Función que SOLO carga y dibuja los perfiles.
+ * No adjunta listeners, por lo que es segura de llamar repetidamente.
+ */
+async function renderProfilesList() {
     const grid = document.getElementById('profiles-grid');
     grid.innerHTML = '<p class="text-gray-500 animate-pulse col-span-full text-center">Invocando perfiles...</p>';
 
     const profiles = await fetchProfiles();
-    grid.innerHTML = ''; // Limpiar loading
+    grid.innerHTML = ''; 
 
     if (profiles.length === 0) {
         grid.innerHTML = '<p class="text-gray-500 col-span-full text-center">No tienes perfiles. Crea el primero abajo.</p>';
@@ -82,10 +79,21 @@ export async function initProfilesListeners() {
             grid.appendChild(renderProfileCard(profile));
         });
     }
+}
 
-    // 3. Configurar formulario de creación
+// --- LISTENER EXPORTADO (Adjunta eventos solo una vez) ---
+
+export async function initProfilesListeners() {
+    // 1. Configurar botón de logout global
+    document.getElementById('btn-logout-profiles')?.addEventListener('click', handleLogout);
+
+    // 2. Cargar y Pintar perfiles (Llamada inicial)
+    await renderProfilesList();
+
+    // 3. Configurar formulario de creación (ESTO SOLO SE ADJUNTA UNA VEZ)
     const form = document.getElementById('create-profile-form');
-    if (form) {
+    if (form && !form.dataset.listenerAttached) { // <--- Doble chequeo para seguridad
+        
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const nickname = document.getElementById('new-nickname').value.trim();
@@ -100,16 +108,18 @@ export async function initProfilesListeners() {
                 btn.disabled = true;
                 await createProfile(nickname, role);
                 
-                // Recargar la lista de perfiles
+                // ¡CORRECCIÓN CLAVE! SOLO RENDERIZAR LA LISTA, NO REINICIAR LOS LISTENERS
                 form.reset();
-                initProfilesListeners(); 
+                await renderProfilesList(); 
                 
             } catch (error) {
-                alert('Error al crear perfil: ' + error.message);
+                alert('Error al crear perfil: Asegúrate que el nickname sea único (si aplicas reglas DB) o ' + error.message);
             } finally {
                 btn.textContent = originalText;
                 btn.disabled = false;
             }
         });
+        
+        form.dataset.listenerAttached = 'true';
     }
 }
